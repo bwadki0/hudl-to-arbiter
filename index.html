@@ -514,16 +514,31 @@ function computeRows(){
       let v=h.row[ci]; v=v==null?'':String(v).trim(); if(v===''){vals[ac.i]=0;continue;} const n=parseFloat(v.replace(/[%,]/g,'')); vals[ac.i]=isNaN(n)?v:n;}
     out.set(ri,vals);
   });
+  const yesNo=c=>/^(played|started|starter|dressed|participated)( in (game|match))?$|^(played|started) (game|match)$/.test(c.n);
+  const roster=blankTemplate()?state.hudl.a.data:state.tpl.a.data;
+  roster.forEach((p,ri)=>{
+    const vals=out.get(ri)||{};
+    for(const ac of state.tpl.a.statCols){
+      if(vals[ac.i]!=null) continue;
+      const mapped=!!state.mapping[compact(ac.label)];
+      if(yesNo(ac)) vals[ac.i]='No';
+      else if(mapped) vals[ac.i]=0;
+    }
+    if(Object.keys(vals).length) out.set(ri,vals);
+  });
   return out;
 }
+function playedSet(){ const s=new Set(); Object.entries(state.players).forEach(([hi,ri])=>{ if(ri!=null) s.add(ri); }); return s; }
 function renderPreview(){
   const t=$('#preview'),roster=blankTemplate()?state.hudl.a.data:state.tpl.a.data,rows=computeRows();
-  const cols=state.tpl.a.statCols.filter(c=>state.mapping[compact(c.label)]);
+  const cols=state.tpl.a.statCols.filter(c=>state.mapping[compact(c.label)]||/^(played|started|starter|dressed|participated)( in (game|match))?$|^(played|started) (game|match)$/.test(c.n));
+  const played=blankTemplate()?null:playedSet();
   let html='<thead><tr><th>Player</th>'+cols.map(c=>`<th>${esc(c.label)}</th>`).join('')+'</tr></thead><tbody>';
-  roster.forEach((p,ri)=>{const v=rows.get(ri); html+=`<tr class="${v?'':'skipped'}"><td>${p.num?`<span class="num">${esc(p.num)}</span>`:''}${esc(p.name)}</td>`+cols.map(c=>v&&v[c.i]!=null?`<td>${esc(v[c.i])}</td>`:'<td class="blank">–</td>').join('')+'</tr>';});
+  roster.forEach((p,ri)=>{const v=rows.get(ri); const dnp=played&&!played.has(ri); html+=`<tr class="${dnp?'skipped':''}" title="${dnp?'Not in Hudl file: written as did not play':''}"><td>${p.num?`<span class="num">${esc(p.num)}</span>`:''}${esc(p.name)}</td>`+cols.map(c=>v&&v[c.i]!=null?`<td>${esc(v[c.i])}</td>`:'<td class="blank">–</td>').join('')+'</tr>';});
   t.innerHTML=html+'</tbody>';
   const unmatched=Object.values(state.players).filter(v=>v==null).length, blanks=state.tpl.a.statCols.length-cols.length;
-  $('#outNote').textContent=blankTemplate()?`Template had no roster, so ${roster.length} player rows will be added. `+(blanks?`${blanks} column${blanks>1?'s':''} left blank.`:''):(unmatched?`${unmatched} Hudl player${unmatched>1?'s':''} unmatched. `:'Everyone matched. ')+(blanks?`${blanks} column${blanks>1?'s':''} left blank.`:'');
+  const dnpCount=played?roster.length-played.size:0;
+  $('#outNote').textContent=blankTemplate()?`Template had no roster, so ${roster.length} player rows will be added. `+(blanks?`${blanks} column${blanks>1?'s':''} left blank.`:''):(unmatched?`${unmatched} Hudl player${unmatched>1?'s':''} unmatched. `:'Everyone matched. ')+(dnpCount?`${dnpCount} roster player${dnpCount>1?'s':''} not in Hudl, written as did not play. `:'')+(blanks?`${blanks} column${blanks>1?'s':''} left blank.`:'');
 }
 function buildOutput(){
   const {parsed,a}=state.tpl,rows=computeRows(),ws=parsed.ws,range=XLSX.utils.decode_range(ws['!ref']);
